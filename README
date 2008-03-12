@@ -1,0 +1,97 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=2187
+
+The script allows to format a piece of latex text by splitting paragraphs according to latex keywords.
+
+The main function, FormatLatexPar, formats the latex text to which the cursor belong, stopping above and below when a keyword is found, or when the vim paragraph ends. Then it moves at the end of the formatted section. If the current line is a comment, does the same thing, but searching for neighboring comments. The function is mapped to CTRL-j.
+
+Note: have a look also at a similar scrip (http://www.vim.org/scripts/script.php?script_id=2307).
+
+Todolist: merge multiple empty line into one.
+
+If you have better solutions, improvements or suggestions, email me!
+
+Here is an example of text, and the resulting formatted text obtained by repeated calls of the function:
+
+<EXAMPLE BEGIN>
+This is an example of the latex formatting script: the paragraphs are
+formatted
+by taking into account special latex ending keywords, as any
+\begin{something}
+    or as,
+    for example
+\end{something}
+
+Also
+formulas
+$$
+    like this
+    one
+$$
+are kept separated
+
+Other separators are a line beginning
+with
+{
+    as this one
+}   
+but others can be easily added
+
+Also,
+comments
+% like this
+% or this
+% are merged
+
+but not % if the comment is not at the beginning of the line
+% as in this case.
+
+\begin{itemize}
+    \item Some commands, as item, are delimiters,
+    but one may want
+    to format them with the text.
+    \item These are treated differently
+    in the script
+\end{itemize}
+
+You can easily suit this script to your needs
+changing SingleLineLatexParEndings and
+MultiLineLatexParEndings functions.
+<EXAMPLE END>
+
+is formatted, by subsequent calls, into
+
+<FORMATTED EXAMPLE BEGIN>
+This is an example of the latex formatting script: the paragraphs 
+are formatted by taking into account special latex ending keywords,
+as any
+\begin{something}
+    or as, for example
+\end{something}
+
+Also formulas
+$$
+    like this one
+$$  
+are kept separated
+
+Other separators are a line beginning with
+{
+    as this one
+}   
+but others can be easily added
+
+Also, comments
+% like this or this are merged
+
+but not % if the comment is not at the beginning of the line
+% as in this case.
+
+\begin{itemize}
+    \item Some commands, as item, are delimiters, but one may want
+    to format them with the text.
+    \item These are treated differently in the script
+\end{itemize}
+
+You can easily suit this script to your needs changing
+SingleLineLatexParEndings and MultiLineLatexParEndings functions.
+<FORMATTED EXAMPLE END>
