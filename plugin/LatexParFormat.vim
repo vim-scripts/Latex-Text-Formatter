@@ -13,7 +13,16 @@ endfunction
 " ******************************************************
 function! CreateLatexParEndings()
 	" Creates the regexp that searches for paragraph terminators
-	return StringsSepCat('\|','^\t*\$\$', '^\t*\\item', '^\\begin', '^\\end', '^{\|^}', '^%')
+	return StringsSepCat('\|','^\s*\$\$', '^\s*\\item', '^\\begin', '^\\end', '^{\s*$', '^\\\a\+{\s*$', '^}$', '^%', '\%$')
+	" '^\s*\$\$\s*$'   a line containing only '$$'
+	" '^\s*\\item'     a line starting with '\item'
+	" '^\\begin'       a line starting with '\begin'
+	" '^\\end'         a line starting with '\end'
+	" '^\s*{\s*$'      a line containing only '{'
+	" '^\\\a\+{\s*$'   a line containing only '\anycommand{'
+	" '^\s*}\s*$'      a line containing only '}'
+	" '^%'             a comment (line starting with '%')
+	" '\%$'            the end of file (so that there is always a match)
 endfunction
 
 " ******************************************************
@@ -68,14 +77,16 @@ function! LatexParEnd()
 	exe ':normal }'
 	let par_bot = line(".")
 
-	" First backward occurrence of a parEnding
+	" End of file
+	"silent exe "/\%$"
+	"let eof = line(".")
+
+	" First forward occurrence of a parEnding
 	" Wrong index if we are at the first line, but does not matter
 	exe ":".(here-1)
 	silent exe "/".parEndings
 	let str_bot = line(".")
 
-	"echo "para ends       at ".par_bot
-	"echo "next occurrence at ".str_bot
 
 	if     str_bot==here
 		let pos = -1
@@ -84,6 +95,10 @@ function! LatexParEnd()
 	else
 		let pos = str_bot-1
 	endif
+
+	"echo "para ends       at ".par_bot
+	"echo "next occurrence at ".str_bot
+	"echo "position returned: ".pos
 
 	" Moves to the par begin
 	if (pos < 0)
@@ -103,13 +118,17 @@ function! FormatLatexPar()
 	let bot   = LatexParEnd()
 
 	if top==-1 || bot==-1
-		"We are on top of a paragraph ending
+		" We are on top of a paragraph ending
+
+		" Uncomment the following line to split the paragraph ending when too long.
+		" This is useful for inlined '\item' (i.e., followed by some text)
+		" silent exe ':'.here.','.here.'!fmt'
 		exe ":".(here+1)
 	elseif bot<here || top>here
-		"We are probably on an empty line
+		" We are probably on an empty line
 		exe ":".(here+1)
 	else
-		"We are in a standard paragraph
+		" We are in a standard paragraph
 
 		" Formats the lines between top and bot
 		silent exe ':'.top.','.bot.'!fmt'
@@ -121,6 +140,6 @@ function! FormatLatexPar()
 endfunction
 
 " Maps FormatPar function to Ctrl-J
-map  <C-j>  <ESC>:silent call FormatLatexPar()<CR>
-map! <C-j>  <ESC>:silent call FormatLatexPar()<CR>
+map  <C-j>  <ESC>:silent call FormatLatexPar()<CR>i
+map! <C-j>  <ESC>:silent call FormatLatexPar()<CR>i
 
