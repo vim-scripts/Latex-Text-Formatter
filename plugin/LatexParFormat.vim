@@ -1,114 +1,148 @@
 " ******************************************************
-function! StringsSepCat(separator, ...)
-    let str = a:1
-	let index = 2
-    while index <= a:0
-		exe "let cur=a:".index
-		let str = str.a:separator.cur
-        let index = index + 1
-    endwhile
+function! SingleLineLatexParEndings()
+	" Creates the regexp that searches for single-line paragraph terminators
+	let empty_s  = '^\s*'
+	let empty_e  = '\s*$'
+	let s:lpe:0  = '\%$'                      " the end of file (so that there is always a match)
+	let s:lpe:1  = empty_s.'\$\$'.empty_e     " a line containing only '$$'
+	let s:lpe:2  = empty_s.'\\begin'          " a line starting with '\begin'
+	let s:lpe:3  = empty_s.'\\end'            " a line starting with '\end'
+	let s:lpe:4  = empty_s.'{'.empty_e        " a line containing only '{'
+	let s:lpe:5  = empty_s.'\\\a\+{'.empty_e  " a line containing only '\anycommand{'
+	let s:lpe:6  = empty_s.'}'.empty_e        " a line containing only '}'
+	let s:lpe:7  = empty_s.'.*%'              " a line having a comment somewhere
+	let s:lpe:8  = empty_s.'\\\['.empty_e      " a line containing only '\['
+	let s:lpe:9  = empty_s.'\\\]'.empty_e      " a line containing only '\]'
+	
+	let str = s:lpe:0
+	let index = 1
+	while index <= 9
+		exe "let cur=s:lpe:".index
+		let str = str.'\|'.cur
+		let index = index + 1
+	endwhile
+	return str
+	
+	"return StringsSepCat('\|', ...)	
+endfunction
+
+" ******************************************************
+function! MultiLineLatexParEndings()
+	" Creates the regexp that searches for multi-line paragraph terminators,
+	" i.e., terminators for which the text starts inlined after the terminator
+	let empty_s  = '^\s*'
+	let empty_e  = '\s*$'
+	let s:lpe:0  = '\%$'                      " the end of file (so that there is always a match)
+	let s:lpe:1  = empty_s.'\\item'           " a line starting with '\item'
+	
+	let str = s:lpe:0
+	let index = 1
+	while index <= 1
+		exe "let cur=s:lpe:".index
+		let str = str.'\|'.cur
+		let index = index + 1
+	endwhile
 	return str
 endfunction
 
 " ******************************************************
-function! CreateLatexParEndings()
-	" Creates the regexp that searches for paragraph terminators
-	return StringsSepCat('\|','^\s*\$\$', '^\s*\\item', '^\\begin', '^\\end', '^{\s*$', '^\\\a\+{\s*$', '^}$', '^%', '\%$')
-	" '^\s*\$\$\s*$'   a line containing only '$$'
-	" '^\s*\\item'     a line starting with '\item'
-	" '^\\begin'       a line starting with '\begin'
-	" '^\\end'         a line starting with '\end'
-	" '^\s*{\s*$'      a line containing only '{'
-	" '^\\\a\+{\s*$'   a line containing only '\anycommand{'
-	" '^\s*}\s*$'      a line containing only '}'
-	" '^%'             a comment (line starting with '%')
-	" '\%$'            the end of file (so that there is always a match)
+" Position of the first occurrence before here (-1 if none)
+function! SearchBackward(here, string)
+	exe ":".(a:here+1)
+	silent exe "?".a:string
+	let str_occ = line(".")
+	if str_occ > a:here
+		return -1
+	endif
+	return str_occ
 endfunction
 
 " ******************************************************
-function! LatexParBegin()
-	" Regular expression for begin/end of a paragraph
-	let parEndings = CreateLatexParEndings()
+" Position of the first occurrence after here (-1 if none)
+function! SearchForward(here, string)
+	exe ":".(a:here-1)
+	silent exe "/".a:string
+	let str_occ = line(".")
+	if str_occ < a:here
+		return -1
+	endif
+	return str_occ
+endfunction
 
+" ******************************************************
+" Maximum among a set of positive numbers. Negative numbers are not considered.
+" If all numbers are negative, -1 is returned
+function! Max(...)
+	let max = -1
+	let index = 1
+	while index <= a:0
+		exe "let cur=a:".index
+		if cur > max
+			let max = cur
+		endif
+		let index = index + 1
+	endwhile
+	return max
+endfunction
+
+" ******************************************************
+" Minimum among a set of positive numbers. Negative numbers are not considered.
+" If all numbers are negative, -1 is returned
+function! Min(...)
+	let min = -1
+	let index = 1
+	while index <= a:0
+		exe "let cur=a:".index
+		if cur >= 0
+			if cur < min || min == -1
+				let min = cur
+			endif
+		endif
+		let index = index + 1
+	endwhile
+	return min
+endfunction
+	
+
+" ******************************************************
+function! LatexParBegin()
 	" Current position
 	let here = line(".")
 	
-	" Paragraph begin
+	" Beginning of the paragraph
 	exe ':normal }'
 	exe ":normal {"
-	let par_top = line(".")
+	let par = line(".")
 
-	" First backward occurrence of a parEnding
-	" Wrong index if we are at the last line, but does not matter
-	exe ":".(here+1)
-	silent exe "?".parEndings
-	let str_top = line(".")
+	let slp = SearchBackward( here, SingleLineLatexParEndings() ) + 1
+	let mlp = SearchBackward( here, MultiLineLatexParEndings() )
+	
+	let pos = Max ( par, slp, mlp )
 
-	"echo "para begins     at ".par_top
-	"echo "prev occurrence at ".str_top
-
-	if     str_top==here
-		let pos = -1
-	elseif str_top>here || str_top<par_top
-		let pos = par_top
-	else
-		let pos = str_top+1
-	endif
-
-	" Moves to the par begin
-	if (pos < 0)
-		exe ":".here
-	else
-		exe ":".pos
-	endif
+	" Moves back to starting cursor position 
+	exe ":".here
 
 	return pos
-
 endfunction
 
 " ******************************************************
 function! LatexParEnd()
-	let parEndings = CreateLatexParEndings()
-
 	" Current position
 	let here = line(".")
 	
-	" Paragraph end
+	" Beginning of the paragraph
 	exe ':normal }'
-	let par_bot = line(".")
+	let par = line(".")
 
-	" End of file
-	"silent exe "/\%$"
-	"let eof = line(".")
+	let slp = SearchForward( here,   SingleLineLatexParEndings() ) - 1
+	let mlp = SearchForward( here+1, MultiLineLatexParEndings() ) - 1
+	
+	let pos = Min ( par, slp, mlp )
 
-	" First forward occurrence of a parEnding
-	" Wrong index if we are at the first line, but does not matter
-	exe ":".(here-1)
-	silent exe "/".parEndings
-	let str_bot = line(".")
-
-
-	if     str_bot==here
-		let pos = -1
-	elseif str_bot<here || str_bot>par_bot
-		let pos = par_bot
-	else
-		let pos = str_bot-1
-	endif
-
-	"echo "para ends       at ".par_bot
-	"echo "next occurrence at ".str_bot
-	"echo "position returned: ".pos
-
-	" Moves to the par begin
-	if (pos < 0)
-		exe ":".here
-	else
-		exe ":".pos
-	endif
+	" Moves back to starting cursor position 
+	exe ":".here
 
 	return pos
-
 endfunction
 
 " ******************************************************
@@ -117,19 +151,13 @@ function! FormatLatexPar()
 	let top   = LatexParBegin()
 	let bot   = LatexParEnd()
 
-	if top==-1 || bot==-1
-		" We are on top of a paragraph ending
-
-		" Uncomment the following line to split the paragraph ending when too long.
-		" This is useful for inlined '\item' (i.e., followed by some text)
-		" silent exe ':'.here.','.here.'!fmt'
-		exe ":".(here+1)
-	elseif bot<here || top>here
-		" We are probably on an empty line
+	if bot<here || top>here
+		" We are on top of a paragraph ending, or on an empty line
+		" We simply move to the following line
 		exe ":".(here+1)
 	else
-		" We are in a standard paragraph
-
+		" We are in a standard paragraph.
+		
 		" Formats the lines between top and bot
 		silent exe ':'.top.','.bot.'!fmt'
 
