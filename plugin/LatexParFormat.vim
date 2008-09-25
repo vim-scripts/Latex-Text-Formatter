@@ -3,27 +3,18 @@ function! SingleLineLatexParEndings()
 	" Creates the regexp that searches for single-line paragraph terminators
 	let empty_s  = '^\s*'
 	let empty_e  = '\s*$'
-	let lpe0  = 'FMT_LTX_TERM'             " the terminator string
-	let lpe1  = empty_s.'\$\$'.empty_e     " a line containing only '$$'
-	let lpe2  = empty_s.'\\begin'          " a line starting with '\begin'
-	let lpe3  = empty_s.'\\end'            " a line starting with '\end'
-	let lpe4  = empty_s.'{'.empty_e        " a line containing only '{'
-	let lpe5  = empty_s.'\\\a\+{'.empty_e  " a line containing only '\anycommand{'
-	let lpe6  = empty_s.'}'.empty_e        " a line containing only '}'
-	let lpe7  = empty_s.'.*%'              " a line having a comment somewhere
-	let lpe8  = empty_s.'\\\['.empty_e     " a line containing only '\['
-	let lpe9  = empty_s.'\\\]'.empty_e     " a line containing only '\]'
+	let list  = [ '^\s*$'                   ] " an empty line
+	let list += [ empty_s.'\$\$'.empty_e    ] " a line containing only '$$'
+	let list += [ empty_s.'\\begin'         ] " a line starting with '\begin'
+	let list += [ empty_s.'\\end'           ] " a line starting with '\end'
+	let list += [ empty_s.'{'.empty_e       ] " a line containing only '{'
+	let list += [ empty_s.'\\\a\+{'.empty_e ] " a line containing only '\anycommand{'
+	let list += [ empty_s.'}'.empty_e       ] " a line containing only '}'
+	let list += [ empty_s.'.*%'             ] " a line having a comment somewhere
+	let list += [ empty_s.'\\\['.empty_e    ] " a line containing only '\['
+	let list += [ empty_s.'\\\]'.empty_e    ] " a line containing only '\]'
 	
-	let str = lpe0
-	let index = 1
-	while index <= 9
-		exe "let cur=lpe".index
-		let str = str.'\|'.cur
-		let index = index + 1
-	endwhile
-	return str
-	
-	"return StringsSepCat('\|', ...)	
+	return join (list, '\|')
 endfunction
 
 " ******************************************************
@@ -32,62 +23,62 @@ function! MultiLineLatexParEndings()
 	" i.e., terminators for which the text starts inlined after the terminator
 	let empty_s  = '^\s*'
 	let empty_e  = '\s*$'
-	let lpe0  = 'FMT_LTX_TERM'             " the terminator string
-	let lpe1  = empty_s.'\\item'          " a line starting with '\item'
+	let list  = [ '^\s*$'                   ] " an empty line
+	let list += [ empty_s.'\\item'          ] " a line starting with '\item'
 	
-	let str = lpe0
-	let index = 1
-	while index <= 1
-		exe "let cur=lpe".index
-		let str = str.'\|'.cur
-		let index = index + 1
-	endwhile
-	return str
+	return join (list, '\|')
 endfunction
 
 " ******************************************************
 " Position of the first occurrence before here (-1 if none)
-function! SearchBackward(here, string)
-	exe ":".(a:here+1)
-	silent exe "?".a:string
-	let str_occ = line(".")
-	if str_occ > a:here
-		return -1
-	endif
+function! SearchBackward(here, string, default)
+	let savewrapscan = &wrapscan
+	try
+
+		set nowrapscan
+		exe ":".(a:here+1)
+		silent exe "?".a:string
+		let str_occ = line(".")
+	catch
+		let str_occ = a:default
+	endtry
+
+	let &wrapscan = savewrapscan
 	return str_occ
 endfunction
 
 " ******************************************************
 " Position of the first occurrence after here (-1 if none)
-function! SearchForward(here, string)
-	exe ":".(a:here-1)
-	silent exe "/".a:string
-	let str_occ = line(".")
-	if str_occ < a:here
-		return -1
-	endif
+function! SearchForward(here, string, default)
+	let savewrapscan = &wrapscan
+	try
+		exe ":".(a:here-1)
+		silent exe "/".a:string
+		let str_occ = line(".")
+	catch
+		let str_occ = a:default
+	endtry
+
+	let &wrapscan = savewrapscan
 	return str_occ
 endfunction
 
 " ******************************************************
 " Beginning of the multiline comment (assuming current line is a comment)
+" NB: a comment is a line that STARTS with %
 function! CommentStart(here)
-	exe ":".(a:here)
-	silent exe '?^[^%]\|^$'
-	return line('.')+1
+	return SearchBackward(a:here, '^[^%]\|^$', 0)+1
 endfunction
 
 " ******************************************************
 " End of the multiline comment (assuming current line is a comment)
+" NB: a comment is a line that STARTS with %
 function! CommentEnd(here)
-	exe ":".(a:here)
-	silent exe '/^[^%]\|^$'
-	return line('.')-1
+	return SearchForward(a:here, '^[^%]\|^$', line('$')+1)-1
 endfunction
 
-
 " ******************************************************
-" Maximum among a set of positive numbers. Negative numbers are not considered.
+" Maximum among a set of positive numbers (negative numbers are not considered).
 " If all numbers are negative, -1 is returned
 function! Max(...)
 	let max = -1
@@ -103,7 +94,7 @@ function! Max(...)
 endfunction
 
 " ******************************************************
-" Minimum among a set of positive numbers. Negative numbers are not considered.
+" Minimum among a set of positive numbers (negative numbers are not considered).
 " If all numbers are negative, -1 is returned
 function! Min(...)
 	let min = -1
@@ -120,43 +111,68 @@ function! Min(...)
 	return min
 endfunction
 	
-
 " ******************************************************
-function! LatexParBegin(here)
-	" Beginning of the paragraph
+function! StandardParBegin(here)
+	" Beginning of standard paragraph
 	exe ":".a:here
 	exe ':normal }'
 	exe ":normal {"
-	let par = line(".")
-
-	let slp = SearchBackward( a:here, SingleLineLatexParEndings() ) + 1
-	let mlp = SearchBackward( a:here, MultiLineLatexParEndings() )
-	
-	"echo 'lpb: ' a:here ' ' par ' ' slp ' ' mlp
-
-	let pos = Min( a:here, Max ( par, slp, mlp ) )
-
-	" Moves back to starting cursor position 
+	let pos = line(".")
+	" Moves back to starting cursor position and exits
 	exe ":".a:here
+	return pos
+endfunction
 
+" ******************************************************
+function! StandardParEnd(here)
+	" Beginning of standard paragraph
+	exe ":".a:here
+	exe ':normal }'
+	let pos = line(".")
+	" Moves back to starting cursor position and exits
+	exe ":".a:here
+	return pos
+endfunction
+
+" ******************************************************
+function! LatexParBegin(here)
+	" Beginning of latex paragraph
+	let slp = SearchBackward( a:here, SingleLineLatexParEndings(), 0) + 1
+	let mlp = SearchBackward( a:here, MultiLineLatexParEndings(),  1)
+	let pos = Min( a:here, Max ( slp, mlp ) )
+	" Moves back to starting cursor position and exits
+	exe ":".a:here
 	return pos
 endfunction
 
 " ******************************************************
 function! LatexParEnd(here)
-	" Beginning of the paragraph
+	" Ending of latex paragraph
+	let slp = SearchForward( a:here,   SingleLineLatexParEndings(), line('$')+1 ) - 1
+	let mlp = SearchForward( a:here+1, MultiLineLatexParEndings(),  line('$')+1 ) - 1
+	let pos = Max (a:here, Min (slp, mlp) )
+	" Moves back to starting cursor position and exits
 	exe ":".a:here
-	exe ':normal }'
-	let par = line(".")
+	return pos
+endfunction
 
-	let slp = SearchForward( a:here,   SingleLineLatexParEndings() ) - 1
-	let mlp = SearchForward( a:here+1, MultiLineLatexParEndings() ) - 1
-	
-	let pos = Max( a:here, Min ( par, slp, mlp ) )
-
-	" Moves back to starting cursor position 
+" ******************************************************
+function! ParBegin(here)
+	let tex_top = LatexParBegin(a:here)
+	let par_top = StandardParBegin(a:here)
+	let pos     = Max ( tex_top, par_top )
+	" Moves back to starting cursor position and exits
 	exe ":".a:here
+	return pos
+endfunction
 
+" ******************************************************
+function! ParEnd(here)
+	let tex_bot = LatexParEnd(a:here)
+	let par_bot = StandardParEnd(a:here)
+	let pos     = Min( tex_bot, par_bot )
+	" Moves back to starting cursor position and exits
+	exe ":".a:here
 	return pos
 endfunction
 
@@ -212,40 +228,34 @@ endfunction
 " ******************************************************
 function! FormatLatexPar(lvl)
 	" Remembers position (+1 because we are adding a starting line) 
-	let here = line(".")+1
+	let here = line(".")
 
 	" Stores window view
 	if v:version >= 700 && a:lvl == 0
 		let fmt_winview = winsaveview()
-	endif    
-
-	" Goes to beginning of file and writes a special terminator string
-	exe ':1'
-	exe ':s/.*/\r&/'
-	exe ':1'
-	exe ':normal iFMT_LTX_TERM'
-	" Goes to end of file and writes a special terminator string
-	exe ':normal G'
-	exe ':s/.*/&\r/'
-	exe ':normal G'
-	exe ':normal iFMT_LTX_TERM'
+	endif
 
 	" finds next comment (to see if we are upon a comment)
-	exe ':'.here	
-	let cmt = SearchForward(here, '^%\|FMT_LTX_TERM')
+	let cmt   = SearchBackward(here, '^%', -1)
+	" first empty line
+	let space = SearchBackward(here, '^\s*$', -1)
 	
 	if cmt == here
 		" if we are on a comment, goes into the recursive mode
 		let next = FormatComment(here,a:lvl)
+	elseif space == here
+		" if we are on an empty line, we merge possibly consecutive empty lines
+		let next = here+1
 	else
 		" otherwise goes for the normal mode
 	
 		" Finds begin and end of paragraph
-		let top = LatexParBegin(here)
-		let bot = LatexParEnd(here)
+		let tex_top = LatexParBegin(here)
+		let top     = ParBegin(here)
+		let bot     = ParEnd(here)
 
-		if bot==here && top==here
-			" We are on top of a paragraph ending, or on an empty line
+		if top < tex_top
+			" We are on top of a paragraph ending
 			" We simply move to the following line (we don't want to
 			" paragraph endings that are too long)
 			let next = here+1
@@ -257,26 +267,18 @@ function! FormatLatexPar(lvl)
 	
 			" Moves at the begin of the next paragraph
 			exe ":".top
-			exe ":".(LatexParEnd(here)+1)
+			exe ":".(ParEnd(here)+1)
 			let next = line(".")
 		endif
 	endif
-
-	" Removes special terminators
-	exe ':normal G'
-	exe ':d'
-	exe ':1'
-	exe ':d'
 
 	" Restores window view
 	if v:version >= 700 && a:lvl == 0
 		call winrestview(fmt_winview)
 	endif
 	" Goes where it is supposed to go
-	exe ':'.(next-1)
+	exe ':'.next
 endfunction
-
-
 
 " Maps FormatPar function to Ctrl-J
 map  <C-j>  <ESC>:silent call FormatLatexPar(0)<CR>i
