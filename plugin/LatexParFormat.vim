@@ -10,7 +10,7 @@ function! SingleLineLatexParEndings()
 	let list += [ empty_s.'{'.empty_e       ] " a line containing only '{'
 	let list += [ empty_s.'\\\a\+{'.empty_e ] " a line containing only '\anycommand{'
 	let list += [ empty_s.'}'.empty_e       ] " a line containing only '}'
-	let list += [ empty_s.'.*%'             ] " a line having a comment somewhere
+	let list += [ '.*%'                     ] " a line having a comment somewhere
 	let list += [ empty_s.'\\\['.empty_e    ] " a line containing only '\['
 	let list += [ empty_s.'\\\]'.empty_e    ] " a line containing only '\]'
 	
@@ -236,13 +236,18 @@ function! FormatLatexPar(lvl)
 	endif
 
 	" finds next comment (to see if we are upon a comment)
-	let cmt   = SearchBackward(here, '^%', -1)
+	let cmt   = SearchForward(here, '^%', -1)
 	" first empty line
-	let space = SearchBackward(here, '^\s*$', -1)
+	let space = SearchForward(here, '^\s*$', -1)
+	" finds next comment (to see if we the current line has a comment at some point)
+	let cmt2  = SearchForward(here, '%', -1)
 	
 	if cmt == here
 		" if we are on a comment, goes into the recursive mode
 		let next = FormatComment(here,a:lvl)
+	elseif cmt2 == here
+		" We are on a line ending with a comment. Skip the line
+		let next = here+1
 	elseif space == here
 		" if we are on an empty line, we merge possibly consecutive empty lines
 		let next = here+1
