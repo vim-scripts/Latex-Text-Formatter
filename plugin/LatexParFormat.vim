@@ -180,7 +180,7 @@ function! FormatComment(here, lvl)
 
 	let buf   = @%
 	
-	" echomsg 'Comment starting at '.top.' and ending at '.bot.' with cmtstart being '.cmtstart.'. Buffer saved in '.buf.'.fmttmp'
+	" echomsg 'Comment starting at '.top.' and ending at '.bot.' with cmtstart being '.cmtstart.'
 
 	" copies the multiline comment, and cleans a bit around
 	exe ':'.top.','.bot.'d'
@@ -208,8 +208,6 @@ function! FormatComment(here, lvl)
 	exe ':%s,^,'.cmtstart.','
 	exe ':'.next
 	exe ':%d'
-	" deletes the temporary buffer
-	exe ':bd!'
 	" copies back the text in the original buffer
 	exe ':b '.buf
 	exe ':'.top-1
@@ -219,6 +217,8 @@ function! FormatComment(here, lvl)
 	else
 		exe ':put'
 	endif
+	" deletes the temporary buffer
+	exe ':bd! '.buf.'.fmttmp'
 	"goes at the next point
 	return top + next - 1
 endfunction
