@@ -101,7 +101,7 @@ endfunction
 function! LatexParEnd(here)
 	" Ending of latex paragraph
 	let slp = SearchForward( a:here,   SingleLineLatexParEndings(), line('$')+1 ) - 1
-	let mlp = SearchForward( a:here+1, MultiLineLatexParEndings(),  line('$')+1 ) - 1
+	let mlp = SearchForward( a:here+1,  MultiLineLatexParEndings(), line('$')+1 ) - 1
 	let pos = Max (a:here, Min (slp, mlp) )
 	" Moves back to starting cursor position and exits
 	exe ":".a:here
@@ -158,40 +158,29 @@ endfunction
 " Beginning of the multiline comment (assuming current line is a comment)
 " NB: a comment is a line that STARTS with commentString
 function! CommentStart(here, cmtstart)
-	"return SearchBackward(a:here, '^[^%]\|^$', 0)+1
-
 	" Uses negative look-ahead assertion
-	"return SearchBackward(a:here, '^\(\s*'.s:commentString.'\)\@!', 0)+1
-	return SearchBackward(a:here, '^\('.a:cmtstart.'\)\@!', 0)+1
+	return SearchBackward(a:here-1, '^\('.a:cmtstart.'\)\@!', 0)+1
 endfunction
 
 " ******************************************************
 " End of the multiline comment (assuming current line is a comment)
 " NB: a comment is a line that STARTS with %
 function! CommentEnd(here, cmtstart)
-	"return SearchForward(a:here, '^[^%]\|^$', line('$')+1)-1
-
 	" Uses negative look-ahead assertion
-	"return SearchForward(a:here, '^\(\s*'.s:commentString.'\)\@!', line('$')+1)-1
-	return SearchForward(a:here, '^\('.a:cmtstart.'\)\@!', line('$')+1)-1
+	return SearchForward(a:here+1, '^\('.a:cmtstart.'\)\@!', line('$')+1)-1
 endfunction
 
 " ******************************************************
 function! FormatComment(here, lvl)
-	if (a:lvl>3)
-		return
-	endif
-
 	let cmtstart = substitute(getline(a:here), '^\(\s*'.s:commentString.'\).*', '\1', '')
 
 	" if we are on a comment, goes into the recursive mode
 	let top   = CommentStart(a:here, cmtstart)
 	let bot   = CommentEnd(a:here, cmtstart)
 
-
 	let buf   = @%
 	
-	"echomsg 'Comment starting at '.top.' and ending at '.bot.' with cmtstart being '.cmtstart.'. Buffer saved in '.buf.'.fmttmp'
+	" echomsg 'Comment starting at '.top.' and ending at '.bot.' with cmtstart being '.cmtstart.'. Buffer saved in '.buf.'.fmttmp'
 
 	" copies the multiline comment, and cleans a bit around
 	exe ':'.top.','.bot.'d'
@@ -237,6 +226,11 @@ endfunction
 
 " ******************************************************
 function! FormatLatexPar(lvl)
+	" Safety switch to avoid infinite recursion due to some error in the code
+	if (a:lvl>5)
+		return
+	endif
+
 	if &filetype == "java" || &filetype == "cpp" || &filetype == "c"
 		let s:commentString = "//"
 	elseif &filetype == "tex"
@@ -310,8 +304,10 @@ function! FormatLatexPar(lvl)
 endfunction
 
 " Maps FormatPar function to Ctrl-j
-map  <C-j>  <ESC>:silent call FormatLatexPar(0)<CR>i
-map! <C-j>  <ESC>:silent call FormatLatexPar(0)<CR>i
+"map  <C-j>  <ESC>:silent call FormatLatexPar(0)<CR>i
+"map! <C-j>  <ESC>:silent call FormatLatexPar(0)<CR>i
+map  <C-j>  <ESC>:call FormatLatexPar(0)<CR>i
+map! <C-j>  <ESC>:call FormatLatexPar(0)<CR>i
 
 " ******************************************************
 function! ToggleComment() range
