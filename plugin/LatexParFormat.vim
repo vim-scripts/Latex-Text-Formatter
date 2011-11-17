@@ -10,10 +10,10 @@ function! SingleLineLatexParEndings()
 	let list += [ empty_s.'{'.empty_e       ] " a line containing only '{'
 	let list += [ empty_s.'\\\a\+{'.empty_e ] " a line containing only '\anycommand{'
 	let list += [ empty_s.'}'.empty_e       ] " a line containing only '}'
-	let list += [ '.*%'                     ] " a line having a comment somewhere
+	let list += [ '.*'.s:commentString      ] " a line having a comment somewhere
 	let list += [ empty_s.'\\\['.empty_e    ] " a line containing only '\['
 	let list += [ empty_s.'\\\]'.empty_e    ] " a line containing only '\]'
-	
+
 	return join (list, '\|')
 endfunction
 
@@ -27,54 +27,6 @@ function! MultiLineLatexParEndings()
 	let list += [ empty_s.'\\item'          ] " a line starting with '\item'
 	
 	return join (list, '\|')
-endfunction
-
-" ******************************************************
-" Position of the first occurrence before here (-1 if none)
-function! SearchBackward(here, string, default)
-	let savewrapscan = &wrapscan
-	try
-
-		set nowrapscan
-		exe ":".(a:here+1)
-		silent exe "?".a:string
-		let str_occ = line(".")
-	catch
-		let str_occ = a:default
-	endtry
-
-	let &wrapscan = savewrapscan
-	return str_occ
-endfunction
-
-" ******************************************************
-" Position of the first occurrence after here (-1 if none)
-function! SearchForward(here, string, default)
-	let savewrapscan = &wrapscan
-	try
-		exe ":".(a:here-1)
-		silent exe "/".a:string
-		let str_occ = line(".")
-	catch
-		let str_occ = a:default
-	endtry
-
-	let &wrapscan = savewrapscan
-	return str_occ
-endfunction
-
-" ******************************************************
-" Beginning of the multiline comment (assuming current line is a comment)
-" NB: a comment is a line that STARTS with %
-function! CommentStart(here)
-	return SearchBackward(a:here, '^[^%]\|^$', 0)+1
-endfunction
-
-" ******************************************************
-" End of the multiline comment (assuming current line is a comment)
-" NB: a comment is a line that STARTS with %
-function! CommentEnd(here)
-	return SearchForward(a:here, '^[^%]\|^$', line('$')+1)-1
 endfunction
 
 " ******************************************************
@@ -177,19 +129,76 @@ function! ParEnd(here)
 endfunction
 
 " ******************************************************
+" Position of the first occurrence before here (-1 if none)
+function! SearchBackward(here, string, default)
+	exe ":".(a:here+1)
+	let ind = search(a:string, 'bW')
+
+	if (ind==0)
+		return a:default
+	else
+		return ind
+	endif
+endfunction
+
+" ******************************************************
+" Position of the first occurrence after here (-1 if none)
+function! SearchForward(here, string, default)
+	exe ":".(a:here-1)
+	let ind = search(a:string, 'W')
+
+	if (ind==0)
+		return a:default
+	else
+		return ind
+	endif
+endfunction
+
+" ******************************************************
+" Beginning of the multiline comment (assuming current line is a comment)
+" NB: a comment is a line that STARTS with commentString
+function! CommentStart(here, cmtstart)
+	"return SearchBackward(a:here, '^[^%]\|^$', 0)+1
+
+	" Uses negative look-ahead assertion
+	"return SearchBackward(a:here, '^\(\s*'.s:commentString.'\)\@!', 0)+1
+	return SearchBackward(a:here, '^\('.a:cmtstart.'\)\@!', 0)+1
+endfunction
+
+" ******************************************************
+" End of the multiline comment (assuming current line is a comment)
+" NB: a comment is a line that STARTS with %
+function! CommentEnd(here, cmtstart)
+	"return SearchForward(a:here, '^[^%]\|^$', line('$')+1)-1
+
+	" Uses negative look-ahead assertion
+	"return SearchForward(a:here, '^\(\s*'.s:commentString.'\)\@!', line('$')+1)-1
+	return SearchForward(a:here, '^\('.a:cmtstart.'\)\@!', line('$')+1)-1
+endfunction
+
+" ******************************************************
 function! FormatComment(here, lvl)
+	if (a:lvl>3)
+		return
+	endif
+
+	let cmtstart = substitute(getline(a:here), '^\(\s*'.s:commentString.'\).*', '\1', '')
+
 	" if we are on a comment, goes into the recursive mode
-	let top   = CommentStart(a:here)
-	let bot   = CommentEnd(a:here)
+	let top   = CommentStart(a:here, cmtstart)
+	let bot   = CommentEnd(a:here, cmtstart)
+
 
 	let buf   = @%
+	
+	"echomsg 'Comment starting at '.top.' and ending at '.bot.' with cmtstart being '.cmtstart.'. Buffer saved in '.buf.'.fmttmp'
 
 	" copies the multiline comment, and cleans a bit around
 	exe ':'.top.','.bot.'d'
 	exe ':e '.buf.'.fmttmp'
 	exe ':put!'
 	" removes the comment
-	exe ':%s/^%//'
+	exe ':%s,^'.cmtstart.',,'
 	" goes at the right line
 	exe ':'.(a:here-top+1)
 	
@@ -207,7 +216,7 @@ function! FormatComment(here, lvl)
 		exe ':d'
 	endif
 	" puts back the comment character and copies the text into the register
-	exe ':%s/^/%/'
+	exe ':%s,^,'.cmtstart.','
 	exe ':'.next
 	exe ':%d'
 	" deletes the temporary buffer
@@ -225,8 +234,19 @@ function! FormatComment(here, lvl)
 	return top + next - 1
 endfunction
 
+
 " ******************************************************
 function! FormatLatexPar(lvl)
+	if &filetype == "java" || &filetype == "cpp" || &filetype == "c"
+		let s:commentString = "//"
+	elseif &filetype == "tex"
+		let s:commentString = '%'
+	elseif &filetype == "vim"
+		let s:commentString = '"'
+	else
+		let s:commentString = "%"
+	endif
+
 	" Remembers position (+1 because we are adding a starting line) 
 	let here = line(".")
 
@@ -236,11 +256,11 @@ function! FormatLatexPar(lvl)
 	endif
 
 	" finds next comment (to see if we are upon a comment)
-	let cmt   = SearchForward(here, '^%', -1)
+	let cmt   = SearchForward(here, '^\s*'.s:commentString, -1)
 	" first empty line
 	let space = SearchForward(here, '^\s*$', -1)
 	" finds next comment (to see if we the current line has a comment at some point)
-	let cmt2  = SearchForward(here, '%', -1)
+	let cmt2  = SearchForward(here, s:commentString, -1)
 	
 	if cmt == here
 		" if we are on a comment, goes into the recursive mode
@@ -268,8 +288,12 @@ function! FormatLatexPar(lvl)
 			" We are in a standard paragraph
 			
 			" Formats the lines between top and bot
-			silent exe ':'.top.','.bot.'!fmt'
-	
+			silent exe ':'.top.','.bot.'!fmt -w 80'
+
+			" goes at the right line
+			" exe ':'.top
+			" silent exe ':normal V'.(bot-top).'jgq'
+
 			" Moves at the begin of the next paragraph
 			exe ":".top
 			exe ":".(ParEnd(here)+1)
@@ -285,7 +309,38 @@ function! FormatLatexPar(lvl)
 	exe ':'.next
 endfunction
 
-" Maps FormatPar function to Ctrl-J
+" Maps FormatPar function to Ctrl-j
 map  <C-j>  <ESC>:silent call FormatLatexPar(0)<CR>i
 map! <C-j>  <ESC>:silent call FormatLatexPar(0)<CR>i
+
+" ******************************************************
+function! ToggleComment() range
+	if &filetype == "html" || &filetype == "xml"
+		execute ":" . a:firstline . "," . a:lastline . 's/^\(.*\)$/<!-- \1 -->/'
+	else
+		if &filetype == "java" || &filetype == "cpp" || &filetype == "c"
+			let commentString = "//"
+		elseif &filetype == "tex"
+			let commentString = '%'
+		elseif &filetype == "vim"
+			let commentString = '"'
+		else
+			let commentString = "%"
+		endif
+
+		let linestring = getline(".")
+		if linestring =~ '^'.commentString.'.*'
+			" if we are on a comment, removes it
+    			execute ":" . a:firstline . "," . a:lastline . 's,^' . commentString . ',,'
+		else
+			" No comment here, adds a comment
+			execute ":" . a:firstline . "," . a:lastline . 's,^,' . commentString . ','
+		endif
+	endif
+endfunction
+
+"command -range Comment call EnhancedCommentify('', 'guess', <line1>, <line2>)
+" Toggles a comment, (re)entering edit mode
+map! <C-g>  <ESC>:silent call ToggleComment()<CR>i
+map  <C-g>  :silent call ToggleComment()<CR>i
 
