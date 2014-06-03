@@ -4,6 +4,14 @@ The script allows to format a piece of latex text by splitting paragraphs accord
 
 The main function, FormatLatexPar, formats the latex text to which the cursor belong, stopping above and below when a keyword is found, or when the vim paragraph ends. Then it moves at the end of the formatted section. If the current line is a comment, does the same thing, but searching for neighboring comments. The function is mapped to CTRL-j.
 
+To keep the cursor in its current location set 
+let g:LatexTextFormatter_stayhere = 1
+in the vimrc file.
+
+To remap the keys use (to remove the default insert, for example)
+autocmd VimEnter * map  <C-j>  <ESC>:call FormatLatexPar(0)<CR>
+autocmd VimEnter * map! <C-j>  <ESC>:call FormatLatexPar(0)<CR>
+
 Note: have a look also at a similar scrip (http://www.vim.org/scripts/script.php?script_id=2307).
 
 Todolist: merge multiple empty line into one.

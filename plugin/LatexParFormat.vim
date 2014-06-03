@@ -1,4 +1,10 @@
 " ******************************************************
+" set a flag to tell the cursor to stay where it is
+if !exists('g:LatexTextFormatter_stayhere')
+  let g:FormatLatexPar_here = 0
+endif
+
+" ******************************************************
 function! SingleLineLatexParEndings()
 	" Creates the regexp that searches for single-line paragraph terminators
 	let empty_s  = '^\s*'
@@ -300,7 +306,11 @@ function! FormatLatexPar(lvl)
 		call winrestview(fmt_winview)
 	endif
 	" Goes where it is supposed to go
-	exe ':'.next
+  if g:LatexTextFormatter_stayhere == 1
+    exe ':'.here
+  else
+    exe ':'.next
+  endif
 endfunction
 
 " Maps FormatPar function to Ctrl-j
